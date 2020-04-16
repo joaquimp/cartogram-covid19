@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<style>
+    body {
+        font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+        width: 960px;
+        height: 500px;
+        position: relative;
+    }
+
+    #map-container {
+        height: 500px;
+        width: 500px;
+    }
+
+    .states {
+        fill: grey;
+        stroke: black;
+        stroke-linejoin: round;
+    }
+
+    #map {
+        overflow: visible;
+    }
+</style>
+
+<body>
+    <div id="click_to_run" onclick="doUpdate()">Haz click para hacer cartograma</div>
+    <div id="map-container"></div>
+</body>
+<script src="https://d3js.org/d3.v3.min.js"></script>
+<script src="https://d3js.org/topojson.v1.min.js"></script>
+<script src="cartogram.js"></script>
+<script src="conversor.js"></script>
+<script>
+
+    var originalData = null;
+
+    var map = d3.select("#map-container")
+        .append('svg')
+        .attr("id", "map");
+    var topo;
+
+    var edos = map.append("g")
+        .attr("id", "edos")
+        .selectAll("path");
+
+    var proj = d3.geo.mercator()
+        .center([-50, -10])
+        .scale(1000);
+
+    var carto = d3.cartogram()
+        .projection(proj)
+        .properties(function (d) {
+            return d.properties;
+        });
+
+    var topology, geometry;
+
+    function makeMap(data) {
+        topology = data;
+        geometries = data.objects.states.geometries;
+        var features = carto.features(data, geometries),
+            path = d3.geo.path()
+                .projection(proj);
+
+        edos = edos.data(features)
+            .enter()
+            .append("path")
+            .attr("class", "states")
+            .attr("id", function (d) {
+                return d.properties.name;
+            })
+            .attr("d", path);
+    };
+
+    function doUpdate() {
+
+        const column = [
+            { key: 'Casos Novos', value: 'casosNovos' },
+            { key: 'Casos Acumulados', value: 'casosAcumulados' },
+            { key: 'Obitos Novos', value: 'obitosNovos' },
+            { key: 'Obitos Acumulados', value: 'obitosAcumulados' },
+        ][1];
+
+        const day = "2020-04-14";
+        var data = originalData.filter(d => d.data === day);
+        data = data.map(d => {
+            return {
+                state: converterEstados(d.estado),
+                value: d[column.value]
+            }
+        });
+
+        var scale = d3.scale.linear()
+            .domain([0, d3.max(data, d => +d.value)])
+            .range([1, 1000]);
+        
+        carto.value(function (d) {
+            var dayData = data.find(x => x.state == d.properties.name);
+            return + scale(dayData.value)
+        });
+
+        var carto_features = carto(topology, geometries).features;
+        //actualiza el mapa
+        edos.data(carto_features);
+
+        edos.transition()
+            .duration(900)
+            .attr("d", carto.path);
+    };
+
+    d3.dsv(';')("data.csv", function (error, data) {
+        originalData = data;
+        d3.json("br-states.json", function (mapData) {
+            makeMap(mapData)
+        });
+    });
+
+    
+
+</script>
